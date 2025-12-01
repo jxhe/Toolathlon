@@ -52,6 +52,7 @@ class SubmitEvaluationRequest(BaseModel):
     model_name: str
     workers: int = 10
     custom_job_id: Optional[str] = None  # Allow custom job_id
+    tasks: Optional[str] = None  # Comma-separated task names or single task name
 
 class SubmitEvaluationResponse(BaseModel):
     status: str
@@ -122,6 +123,8 @@ async def execute_evaluation(job_id: str, mode: str, config: Dict[str, Any]):
             f.write(f"Mode: {mode}\n")
             f.write(f"Model: {config['model_name']}\n")
             f.write(f"Workers: {config['workers']}\n")
+            if config.get('tasks'):
+                f.write(f"Tasks filter: {config['tasks']}\n")
             f.write(f"Started: {datetime.now().isoformat()}\n")
             f.write(f"{'='*50}\n\n")
 
@@ -152,13 +155,28 @@ async def execute_evaluation(job_id: str, mode: str, config: Dict[str, Any]):
             env["TOOLATHLON_OPENAI_BASE_URL"] = f"http://localhost:{WS_PROXY_PORT}/v1"
             env["TOOLATHLON_OPENAI_API_KEY"] = "dummy"
 
+        # Create task list file if tasks are specified
+        task_list_file = ""
+        if config.get("tasks"):
+            task_list_file = str(job_dir / "task_list.txt")
+            with open(task_list_file, 'w') as f:
+                # Support both comma-separated list and single task
+                tasks = [t.strip() for t in config["tasks"].split(',')]
+                f.write('\n'.join(tasks))
+            
+            with open(log_file, 'a') as f:
+                f.write(f"Task filter applied: {', '.join(tasks)}\n")
+                f.flush()
+
         run_process = await run_command_async(
             [
                 "bash", "scripts/run_parallel.sh",
                 config["model_name"],
                 str(job_dir),
                 "unified",
-                str(config["workers"])
+                str(config["workers"]),
+                "lockon0927/toolathlon-task-image:1016beta",
+                task_list_file  # Pass task list file as 6th argument
             ],
             env=env,
             log_file=log_file
@@ -310,7 +328,8 @@ async def submit_evaluation(request: Request, data: SubmitEvaluationRequest):
         "base_url": data.base_url,
         "api_key": data.api_key,
         "model_name": data.model_name,
-        "workers": data.workers
+        "workers": data.workers,
+        "tasks": data.tasks
     }
 
     asyncio.create_task(execute_evaluation(job_id, data.mode, config))

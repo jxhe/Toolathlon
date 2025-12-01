@@ -1,57 +1,55 @@
 # Toolathlon Remote Evaluation Service
+Besides configuring Toolathlon evaluation on your own machine, we also provide Toolathlon evaluation as a service on public servers, where we have setup all the required MCP accounts and you don't need to worry about the setup -- you don't even need to install any MCP-related dependencies, evaluation can be ran by just communicating with our public server.
 
-Run Toolathlon evaluations on a remote server with two operating modes: **public** (using APIs that are accessible on the Internet) and **private** (using your locally-deployed LLMs).
+> We have set up a public Toolathlon evaluation service on 47.253.6.47, this is mainly for you to quickly play with our evaluation without any setup. However, due to the potential evaluation conflict from multiple users, we have constrained this public service to be 3 evaluation requests per IP per 24 hours. If you find this public service crowded, you have a few other options to do the evaluation: 
+> 1. Setup your own Toolathlon evaluation service on your own machine following the main readme, which would take like 20-30 minutes.
+> 2. If you are a major user that will use Toolathlon evaluation a lot, please contact us (jlini@cse.ust.hk / junxianh@cse.ust.hk), we may be able to provide a dedicated evaluation service for you (for free). 
+> 3. If you have an API endpoint and just want to test your model, please contact us (jlini@cse.ust.hk / junxianh@cse.ust.hk) and we are happy to help you run evaluation on Toolathlon with your given API endpoint.
 
-## Quick Overview
-
-**Components:**
-- `eval_server.py` - Server that runs evaluations
-- `eval_client.py` - Client that submits tasks and retrieves results
-- `simple_server_ws.py` - WebSocket proxy for private mode (auto-started by server)
-- `simple_client_ws.py` - WebSocket client for private mode (auto-started by client)
-
-**Key Features:**
-- Two modes: Public (OpenAI/Anthropic/etc.) and Private (e.g. local vLLM/SGLang)
-- Rate limiting: 3 tasks per IP per 24 hours
-- Single concurrent task execution
-- 240-minute timeout per task
-- Real-time log streaming
-- Background daemon operation
-
----
 
 ## Quick Start
-**TLDR**: we have setup a public Toolathlon evaluation service (with all depencies installed and accounted configurated) on 47.253.6.47, if you want to test **your inhouse locally deployed model**, just simply put `eval_client.py` and `simple_client_ws.py` together under a folder on your own machine, then install the client-side dependencies:
+If you want to test **your inhouse locally deployed model**, just simply put `eval_client.py` and `simple_client_ws.py` together under a folder on your own machine, then install the client-side dependencies:
 
 ```bash
 pip install httpx typer websockets
 ```
 
+> **Note:** By default, the evaluation service runs **all tasks** in the benchmark. To evaluate only specific tasks (e.g., a single task for quick testing), use the `--tasks` option. See the [Running Specific Tasks](#running-specific-tasks) section for details.
+
 Then run the following command directly under this folder:
 
 ```bash
+# Configuration:
+# - base-url: your local openai-compatible endpoint
+# - api-key: this argument will be ignored in private mode  
+# - workers: suggested # of parallel workers (default: 10)
+# - tasks: optional comma-separated task names, or omit to run all tasks
+
 python eval_client.py run \
   --mode private \
-  --base-url http://localhost:8001/v1 \ # your local openai-compatible endpoint
-  --api-key dummy \ # this argument will be ignored in private mode
+  --base-url http://localhost:8001/v1 \
+  --api-key dummy \
   --model-name your-model-name \
-  --workers 10 \ # suggested # of parallel workers
-  --output-file ./results/eval_stats.json \ # any file path
-  --log-file ./results/client.log \ # any file path
-  --server-log ./results/server.log \ # any file path
-  --traj-log ./results/traj_log_all.jsonl \ # any file path
-  --server-host 47.253.6.47 \ # our public host address
-  --server-port 8080 \ # our public port
-  --ws-proxy-port 8081 # our public port
+  --workers 10 \
+  --output-file ./results/eval_stats.json \
+  --log-file ./results/client.log \
+  --server-log ./results/server.log \
+  --traj-log ./results/traj_log_all.jsonl \
+  --server-host 47.253.6.47 \
+  --server-port 8080 \
+  --ws-proxy-port 8081 \
+  --tasks academic-warning,ab-testing
 ```
 If the server is idle, your task will be submitted and you will find the results later on under the `./results` directory. Otherwise, please wait for a while and check again later via ``python eval_client.py check --server-host 47.253.6.47 --server-port 8080``.
 
-If you have ready-to-use public API endpoind and API key, please use the public mode as follows:
+If you have ready-to-use public API endpoind and API key, please use the public mode as follows (which will be faster than private mode):
 
 ```bash
+# Note: base-url should be an openai-compatible endpoint
+
 python eval_client.py run \
   --mode public \
-  --base-url your-puclic-endpoint \ # should be an openai-compatible endpoint as well
+  --base-url your-puclic-endpoint \
   --api-key sk-your-key \
   --model-name your-model-name \
   --workers 10 \
@@ -62,9 +60,10 @@ python eval_client.py run \
   --server-host 47.253.6.47 \
   --server-port 8080
 ```
-It will return the results exactly the same as in provate mode, we won't save your API keys locally.
+It will return the results exactly the same as in private mode, we won't save your API keys locally.
 
 If you meet any trouble, please feel free to contact us (jlini@cse.ust.hk / junxianh@cse.ust.hk), e.g. we may help you testing your model if provided with your public API endpoint and API key.
+
 
 # Implemention Details
 
@@ -203,16 +202,21 @@ python eval_client.py run \
 - `--server-log`: Server-side log file (synced in real-time)
 - `--traj-log`: Trajectory log file (optional, saves traj_log_all.jsonl)
 - `--job-id`: Custom job ID (optional, for resuming tasks)
+- `--tasks`: Comma-separated task names (optional, e.g., `task1,task2` or just `task1`). If not specified, all tasks will be run.
 
 #### 3. Submit Private Mode Task
 
 Use when you want to use your local LLM:
 
 ```bash
+# Note: api-key argument will be ignored in private mode
+# Default server-port: 8080
+# Default websocket-proxy-port: 8081
+
 python eval_client.py run \
   --mode private \
   --base-url http://localhost:8001/v1 \
-  --api-key dummy \ # this argument will be ignored in private mode
+  --api-key dummy \
   --model-name your-model-name \
   --workers 10 \
   --output-file ./results/eval_stats.json \
@@ -220,8 +224,8 @@ python eval_client.py run \
   --server-log ./results/server.log \
   --traj-log ./results/traj_log_all.jsonl \
   --server-host <host> \
-  --server-port <server-port>, default 8080 \
-  --ws-proxy-port <websocket-proxy-port>, default 8081
+  --server-port 8080 \
+  --ws-proxy-port 8081
 ```
 
 *Note: private mode is designed for locallly deployed LLMs without API key, but if you set environment variables like OPENAI_API_KEY=xxx in your client machine, you can also use private mode to test a public model.
@@ -413,6 +417,47 @@ ERROR: Task exceeded 240 minutes timeout
 
 ## Advanced Usage
 
+### Running Specific Tasks
+
+By default, the evaluation service runs all tasks in the `finalpool` directory. To evaluate only specific tasks, use the `--tasks` option:
+
+**Single Task:**
+```bash
+python eval_client.py run \
+  --mode public \
+  --base-url https://api.openai.com/v1 \
+  --api-key sk-your-key \
+  --model-name gpt-4 \
+  --workers 10 \
+  --output-file ./results/eval_stats.json \
+  --log-file ./results/client.log \
+  --server-log ./results/server.log \
+  --server-host <host> \
+  --server-port 8080 \
+  --tasks academic-warning
+```
+
+**Multiple Tasks:**
+```bash
+python eval_client.py run \
+  --mode public \
+  --base-url https://api.openai.com/v1 \
+  --api-key sk-your-key \
+  --model-name gpt-4 \
+  --workers 10 \
+  --output-file ./results/eval_stats.json \
+  --log-file ./results/client.log \
+  --server-log ./results/server.log \
+  --server-host <host> \
+  --server-port 8080 \
+  --tasks academic-warning,canvas-homework-grader-python,email-paper-homepage
+```
+
+**Use cases:**
+- Quick testing on a single task
+- Running a subset of tasks for debugging
+- Focused evaluation on specific domains
+
 ### Custom Job ID (Resume Tasks)
 
 ```bash
@@ -446,3 +491,21 @@ python eval_client.py run \
   --ws-proxy-port 9001 \
   ...
 ```
+
+## Quick Overview
+
+**Components:**
+- `eval_server.py` - Server that runs evaluations
+- `eval_client.py` - Client that submits tasks and retrieves results
+- `simple_server_ws.py` - WebSocket proxy for private mode (auto-started by server)
+- `simple_client_ws.py` - WebSocket client for private mode (auto-started by client)
+
+**Key Features:**
+- Two modes: Public (OpenAI/Anthropic/etc., for which our server can call these APIs) and Private (e.g. local vLLM/SGLang, for which our server cannot access these endpoints, and evaluation will be done by sending requests to our server and receiving outputs)
+- Rate limiting: 3 tasks per IP per 24 hours
+- Single concurrent task execution
+- 240-minute timeout per task
+- Real-time log streaming
+- Background daemon operation
+
+---

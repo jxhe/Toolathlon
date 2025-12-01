@@ -470,6 +470,7 @@ def run(
     server_port: int = typer.Option(DEFAULT_SERVER_PORT, help="Evaluation server port"),
     ws_proxy_port: int = typer.Option(DEFAULT_WS_PROXY_PORT, help="WebSocket proxy port (for private mode)"),
     job_id: Optional[str] = typer.Option(None, help="Custom job ID (optional, will generate UUID if not provided)"),
+    tasks: Optional[str] = typer.Option(None, help="Comma-separated task names to run (optional, e.g., 'task1,task2' or just 'task1'). If not specified, all tasks will be run."),
 ):
     """
     Submit and run an evaluation task.
@@ -492,6 +493,8 @@ def run(
     typer.echo(f"  Model: {model_name}")
     typer.echo(f"  Workers: {workers}")
     typer.echo(f"  Server: {server_url}")
+    if tasks:
+        typer.echo(f"  Tasks: {tasks}")
     if mode == "private":
         typer.echo(f"  WebSocket Proxy Port: {ws_proxy_port}")
 
@@ -508,7 +511,8 @@ def run(
                     "api_key": api_key,
                     "model_name": model_name,
                     "workers": workers,
-                    "custom_job_id": job_id  # Pass custom job_id if provided
+                    "custom_job_id": job_id,  # Pass custom job_id if provided
+                    "tasks": tasks  # Pass tasks filter if provided
                 }
             )
 

@@ -33,7 +33,7 @@ mkdir -p $DUMP_PATH
 
 # You can provide a txt file with each line representing a task, by doing so you can evaluate on an arbitrary subset of tasks
 # if leave an empty string, it will evaluate on all tasks
-TASK_LIST=""
+TASK_LIST="${6:-}"  # Optional 6th argument for task list file path
 
 # Generate temporary config file with random suffix to avoid conflicts
 RANDOM_SUFFIX=$(date +%s)_$$_$(shuf -i 1000-9999 -n 1)
